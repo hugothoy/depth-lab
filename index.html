@@ -2340,7 +2340,7 @@ in vec2 p;out vec2 vUv;void main(){vUv=p*.5+.5;gl_Position=vec4(p,0,1);}`;
 const FS=`#version 300 es
 precision highp float;in vec2 vUv;out vec4 o;
 uniform sampler2D uImg,uDep;uniform vec2 uCrop,uCam,uRes;uniform float uT,uAsp;
-uniform float black,white,gamma,curve,contrast,detail,invert,cut,cutSoft,floorF,exposure,glow,grain,focus,zoom,view,cmpX,reveal,seed;
+uniform float black,white,gamma,curve,contrast,detail,invert,cut,cutSoft,floorF,exposure,glow,grain,focus,zoom,view,cmpX,reveal,seed,moving;
 float lv(float d){
   d=clamp((d-black)/max(white-black,1e-3),0.,1.);
   d=pow(d,gamma);
@@ -2360,12 +2360,12 @@ float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233))+seed)*43758.5453);}
 void main(){
   vec2 uv=vUv;uv.y=1.-uv.y;uv=.5+(uv-.5)*uCrop;
   vec2 c=vec2(.5);vec2 p=uv;
-  for(int i=0;i<12;i++){float g=texture(uDep,clamp(p,0.,1.)).g;float z=1.+zoom*(g-focus);vec2 q=c+(uv-c)/z;p=mix(p,q-uCam*(g-focus),.6);}
+  if(moving>.5) for(int i=0;i<10;i++){float g=texture(uDep,clamp(p,0.,1.)).g;float z=1.+zoom*(g-focus);vec2 q=c+(uv-c)/z;p=mix(p,q-uCam*(g-focus),.6);}
   p=clamp(p,0.,1.);
   vec3 img=texture(uImg,p).rgb;
   float d=proc(p);
   // glow: bloom do que está perto
-  if(glow>0.){ float b=0.;float w=0.; for(int i=0;i<16;i++){float a=float(i)*2.39996;float r=sqrt(float(i)+.5)/4.*.035;vec2 o2=vec2(cos(a),sin(a)*uAsp)*r; float x=proc(p+o2); b+=max(x-.55,0.);w+=1.;} d+=glow*b/w*2.2; }
+  if(glow>0.){ float b=0.;float w=0.; for(int i=0;i<10;i++){float a=float(i)*2.39996;float r=sqrt(float(i)+.5)/3.16*.035;vec2 o2=vec2(cos(a),sin(a)*uAsp)*r; float x=proc(p+o2); b+=max(x-.55,0.);w+=1.;} d+=glow*b/w*2.2; }
   d*=exposure;
   float fl=smoothstep(.0,.35,1.-uv.y)*0.;
   vec3 col=vec3(d);
@@ -2386,7 +2386,7 @@ function mkTex(){const x=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,x);for(
 const tImg=mkTex(),tDep=mkTex();
 gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tImg);gl.uniform1i(U.uImg,0);
 gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,tDep);gl.uniform1i(U.uDep,1);
-function upImg(src){gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tImg);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);}
+function upImg(src){depthVer=(typeof depthVer==='number'?depthVer:0)+1;gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tImg);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);}
 
 // ---------------- depth buffer (CPU) ----------------
 let raw=null; // {u8,w,h}
@@ -2408,8 +2408,9 @@ function uploadDepth(){
   const l=boxBlur(s,w,h,Math.max(2,9*scale),new Float32Array(n));
   const rg=new Uint8Array(n*2);for(let i=0;i<n;i++){rg[i*2]=s[i];rg[i*2+1]=l[i];}
   gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,tDep);gl.texImage2D(gl.TEXTURE_2D,0,gl.RG8,w,h,0,gl.RG,gl.UNSIGNED_BYTE,rg);
-  depthDirty=false;
+  depthDirty=false;depthVer++;
 }
+let depthVer=0;
 let smoothT=0;
 
 // ---------------- histogram ----------------
@@ -2584,7 +2585,7 @@ function render(tm,W,H,opts={}){
   const sa=srcW/srcH,oa=W/H;gl.uniform2f(U.uCrop,oa>sa?1:oa/sa,oa>sa?sa/oa:1);
   gl.uniform2f(U.uCam,cam.c[0],cam.c[1]);gl.uniform1f(U.zoom,cam.z);gl.uniform2f(U.uRes,W,H);gl.uniform1f(U.uT,tm);gl.uniform1f(U.uAsp,W/H);
   for(const k of ['black','white','gamma','curve','contrast','detail','cut','cutSoft','exposure','glow','grain','focus'])gl.uniform1f(U[k],P[k]);
-  gl.uniform1f(U.floorF,P.floor);gl.uniform1f(U.invert,P.invert?1:0);gl.uniform1f(U.seed,7);
+  gl.uniform1f(U.moving,motion?1:0);gl.uniform1f(U.floorF,P.floor);gl.uniform1f(U.invert,P.invert?1:0);gl.uniform1f(U.seed,7);
   gl.uniform1f(U.view,opts.export?0:(peek?2:(VIEW==='compare'?1:0)));gl.uniform1f(U.cmpX,cmpX);gl.uniform1f(U.reveal,opts.export?1:reveal);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
 }
@@ -2597,8 +2598,14 @@ function loop(now){
   if(revealT>0){reveal=Math.min(1,(now-revealT)/1400);reveal=1-Math.pow(1-reveal,3);if(reveal>=1)revealT=-1;}
   if(depthDirty&&now-smoothT>40){smoothT=now;uploadDepth();}
   if(isVideo&&media.readyState>=2){upImg(media);if(!busy&&now-lastVD>50&&!media.paused){lastVD=now;computeAndShow();}}
-  const [W,H]=viewSize();render(isVideo?media.currentTime:clock,W,H);
+  if(busy&&!isVideo&&revealT<0&&!depthDirty)return; // deixa a GPU livre pra IA
+  const [W,H]=viewSize();
+  const live=VIEW==='motion'||isVideo||revealT>0;
+  const sig=JSON.stringify(P)+VIEW+cmpX+peek+reveal+depthVer+W+'x'+H;
+  if(!live&&sig===lastSig)return; lastSig=sig;
+  render(isVideo?media.currentTime:clock,W,H);
 }
+let lastSig='';
 requestAnimationFrame(loop);
 
 // ---------------- empty-state background ----------------
