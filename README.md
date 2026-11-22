@@ -1,13 +1,16 @@
 # Depth Lab
 
-Ferramenta da ATEAR pra aplicar efeitos de depth map e motion em imagens e vídeos, direto no navegador.
+Transforme qualquer imagem ou vídeo em depth map, direto no navegador.
 
-**Abrir:** https://hugothoy.github.io/depth-lab/
+**Abrir:** https://depth-lab-five.vercel.app · https://hugothoy.github.io/depth-lab/
 
-- Depth gerado por IA (Depth Anything v2, roda no seu computador via WebGPU), pelo brilho da imagem ou por um depth map próprio
-- Camadas/posterização, extrusão, contorno, gradiente de cor, névoa, flare
-- Motion: parallax, órbita, dolly, varredura, onda
-- Erro digital: RGB split, rasgos, pixel sort, dither, grão
-- Exporta PNG (até 4K+) e MP4 (loop de imagem ou vídeo inteiro)
+- IA de profundidade (Depth Anything v2) rodando no seu computador via WebGPU, sem upload
+- Histograma com pontos de longe, meio-tom e perto
+- Forma, recorte de fundo, chão, brilho e grão
+- Comparar antes/depois, segurar Espaço pra ver o original
+- Movimento 3D: órbita, deriva, aproximar ou seguir o mouse
+- Exporta PNG até 8K, MP4 até 4K e o depth bruto
 
-Use no Chrome. Tecla R = composição aleatória. Espaço = pausar.
+Atalhos: O abrir · E exportar · 1 2 3 modos · Espaço original · ⌘Z desfazer · Tab esconder painel · ? ajuda
+
+Versão anterior (efeitos generativos): `v1.html`
